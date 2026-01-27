@@ -5,8 +5,9 @@ prettytable
 chumpy
 opencv-python
 imageio-ffmpeg
-matplotlib==3.1.1
+matplotlib==3.7.5
 roma
 ipdb
 pytorch-metric-learning                         # For one-shot action recognition
 smplx[all]                                      # For mesh recovery
+mediapipe==0.10.11
