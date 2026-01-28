@@ -4,8 +4,7 @@ import cv2
 import numpy as np
 import argparse
 import pandas as pd
-import mediapipe as mp
-from tqdm import tqdm
+#from tqdm import tqdm
 import csv
 import torch
 import torch.nn as nn
@@ -24,18 +23,7 @@ def parse_args():
     parser.add_argument('--clip_len', type=int, default=243, help='clip length for network input')
     opts = parser.parse_args()
     return opts
-
-mp_pose = mp.solutions.pose
-pose_model = mp_pose.Pose(
-    static_image_mode=False,
-    model_complexity=2,
-    smooth_landmarks=True,
-    enable_segmentation=False,
-    #smooth_segmentation=True,
-    min_detection_confidence=0.5,
-    min_tracking_confidence=0.5
-)
-
+    
 def main(data_path):
     model_backbone = load_backbone(args)
     if torch.cuda.is_available():
@@ -68,7 +56,8 @@ def main(data_path):
 
     results_all = []
     with torch.no_grad():
-        for batch_input in tqdm(test_loader):
+        #for batch_input in tqdm(test_loader):
+        for i, batch_input in enumerate(test_loader):
             N, T = batch_input.shape[:2]
             if torch.cuda.is_available():
                 batch_input = batch_input.cuda()
@@ -91,6 +80,9 @@ def main(data_path):
                 predicted_3d_pos[...,:2] = batch_input[...,:2]
             results_all.append(predicted_3d_pos.cpu().numpy())
 
+            print(f"    - Processing: [{i+1}/{len(test_loader)}] ({(i+1)/len(test_loader)*100:.1f}%)", end='\r')
+
+    print(f"    - Processing: [{len(test_loader)}/{len(test_loader)}] (100.0%)")
     results_all = np.hstack(results_all)
     results_all = np.concatenate(results_all)
 
@@ -125,6 +117,9 @@ def load_raw_keypoints(raw_data):
 
 def extract_3d_keypoints():
     """extract video keypoint ["frame","landmark","x","y","z","visibility"]."""
+    import mediapipe as mp
+    mp_pose = mp.solutions.pose
+
     NPY_PATH = "extract/npy"
     os.makedirs(NPY_PATH, exist_ok=True)
     filename = os.path.basename(opts.vid_path)
@@ -133,33 +128,45 @@ def extract_3d_keypoints():
     cap = cv2.VideoCapture(opts.vid_path)
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     pose_rows = []
-
-    pbar = tqdm(total=total_frames, desc="Extracting BlazePose 3D", dynamic_ncols=False)
+    
+    #pbar = tqdm(total=total_frames, desc="Extracting BlazePose 3D", dynamic_ncols=False)
     frame_idx = 0
 
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
+    with mp_pose.Pose(
+        static_image_mode=False,
+        model_complexity=2,
+        smooth_landmarks=True,
+        enable_segmentation=False,
+        #smooth_segmentation=True,
+        min_detection_confidence=0.5,
+        min_tracking_confidence=0.5
+    ) as pose_model:
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
 
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        res = pose_model.process(rgb)
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            res = pose_model.process(rgb)
 
-        if res.pose_world_landmarks:
-            for i, lm in enumerate(res.pose_world_landmarks.landmark):
-                pose_rows.append({
-                    "frame": frame_idx,
-                    "landmark": i,
-                    "x": lm.x,
-                    "y": -lm.y,      # flip for unity-like coords
-                    "z": lm.z,
-                    "visibility": lm.visibility,
-                })
+            if res.pose_world_landmarks:
+                for i, lm in enumerate(res.pose_world_landmarks.landmark):
+                    pose_rows.append({
+                        "frame": frame_idx,
+                        "landmark": i,
+                        "x": lm.x,
+                        "y": -lm.y,      # flip for unity-like coords
+                        "z": lm.z,
+                        "visibility": lm.visibility,
+                    })
 
-        frame_idx += 1
-        pbar.update(1)
+            frame_idx += 1
+            #pbar.update(1)
+            if frame_idx % 10 == 0 or frame_idx == total_frames:
+                print(f"    - Processing: [{frame_idx}/{total_frames}] ({(frame_idx/total_frames)*100:.1f}%)", end='\r')
     cap.release()
-    pbar.close()
+    #pbar.close()
+    print(f"    - Processing: [{total_frames}/{total_frames}] (100.0%)")
 
     df = pd.DataFrame(pose_rows)
     raw_data = f"{NPY_PATH}/{basename}.npz"
@@ -168,7 +175,7 @@ def extract_3d_keypoints():
     reshape_seq = load_raw_keypoints(raw_data)      # (T,33,3)
     reshape_data = f"{NPY_PATH}/{basename}.npy"
     np.save(reshape_data, reshape_seq)
-    print(f"Saved raw → {NPY_PATH}")
+    print(f"Data saved to {reshape_data}")
     os.remove(raw_data)
 
     return reshape_data
