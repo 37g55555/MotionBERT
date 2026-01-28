@@ -1,0 +1,33 @@
+name: blazebert
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.8
+  - pip
+  - numpy
+  - scipy
+  - pandas
+  - ffmpeg
+  - pillow
+  - pyyaml
+  - pytorch
+  - torchvision
+  - torchaudio
+  - pytorch-cuda=12.1
+  - tensorboardX
+  - tqdm
+  - easydict
+  - prettytable
+  - opencv
+  - ipdb
+  - pytorch-metric-learning
+  - pip:
+      - mediapipe==0.10.11  
+      - chumpy
+      - imageio-ffmpeg
+      - matplotlib==3.7.5
+      - roma
+      - smplx[all]
